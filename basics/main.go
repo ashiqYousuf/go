@@ -84,13 +84,13 @@ WE CAN ALSO PROMOTE INTERFACE WITHIN A STRUCT
 // 2. Channels provide a safe way for goroutines to communicate and synchronize their execution.
 // 3. You can send data into a channel from one goroutine and receive it in another.
 
-// !EXAMPLE 13 SEQUENTIAL FILE PROCESSING
+// !EXAMPLE 13 SEQUENTIAL FILE PROCESSING:- Searching duplicate files based on their hash
 
 type pair struct {
 	hash, path string
 }
 
-type filelist []string
+type filelist []string //slice of files
 
 type results map[string]filelist // hash -> [...files]
 
@@ -111,7 +111,7 @@ func hashFile(path string) pair {
 	return pair{fmt.Sprintf("%x", hash.Sum(nil)), path}
 }
 
-// Take I/P directory
+// Take I/P directory and generates hash for every file inside the directory recursively
 func searchTree(dir string) (results, error) {
 	hashes := make(results)
 
