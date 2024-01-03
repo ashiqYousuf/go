@@ -127,7 +127,7 @@ func searchTree(dir string) (results, error) {
 			if fileSize == 0 {
 				fileSize = 1
 			}
-			fmt.Printf("size of %20v is %15d MB\n", fi.Name(), fileSize)
+			fmt.Printf("size of %15v is %10d MB\n", fi.Name(), fileSize)
 		}
 		//? All empty Files will have same hashValue
 		if fi.Mode().IsRegular() && fi.Size() > 0 {
