@@ -1,13 +1,7 @@
 package main
 
 import (
-	"crypto/md5"
 	"fmt"
-	"io"
-	"log"
-	"os"
-	"path/filepath"
-	"strings"
 	"time"
 )
 
@@ -84,82 +78,185 @@ WE CAN ALSO PROMOTE INTERFACE WITHIN A STRUCT
 // 2. Channels provide a safe way for goroutines to communicate and synchronize their execution.
 // 3. You can send data into a channel from one goroutine and receive it in another.
 
-// !EXAMPLE 13 SEQUENTIAL FILE PROCESSING:- Searching duplicate files based on their hash
+// !EXAMPLE 16 BEAUTIFUL RACE CONDITION EXAMPLE WITH 1000 GO-ROUTINES ON CRITICAL VARIABLE (READ MODIFY WRITE CYCLE)
 
-type pair struct {
-	hash, path string
-}
-
-type filelist []string //slice of files
-
-type results map[string]filelist // hash -> [...files]
-
-func hashFile(path string) pair {
-	file, err := os.Open(path)
-
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer file.Close()
-
-	hash := md5.New()
-
-	if _, err := io.Copy(hash, file); err != nil {
-		log.Fatal(err)
-	}
-
-	return pair{fmt.Sprintf("%x", hash.Sum(nil)), path}
-}
-
-// Take I/P directory and generates hash for every file inside the directory recursively
-func searchTree(dir string) (results, error) {
-	hashes := make(results)
-
-	// !The Walk function will recursively visit all files and directories under the specified root.
-	// ! os.FileInfo object providing information about the file or directory
-
-	err := filepath.Walk(dir, func(p string, fi os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if !fi.IsDir() {
-			fileSize := int(fi.Size() / (1024 * 1024))
-			if fileSize == 0 {
-				fileSize = 1
-			}
-			fmt.Printf("size of %15v is %10d MB\n", fi.Name(), fileSize)
-		}
-		//? All empty Files will have same hashValue
-		if fi.Mode().IsRegular() && fi.Size() > 0 {
-			h := hashFile(p)
-			hashes[h.hash] = append(hashes[h.hash], h.path)
-		}
-		return nil
-	})
-
-	return hashes, err
+func decrementByOne(amount *int) {
+	(*amount) -= 1
 }
 
 func main() {
-	start := time.Now()
+	amount := 1000
+	fmt.Println("amount at start", amount)
 
-	if len(os.Args) < 2 {
-		log.Fatal("missing parameters, provide directory name")
+	for i := 1; i <= 1000; i++ {
+		go decrementByOne(&amount)
+		// decrementByOne(&amount)
 	}
 
-	if hashes, err := searchTree(os.Args[1]); err == nil {
-		// fmt.Println(hashes)
-		for hash, files := range hashes {
-
-			if len(files) > 1 {
-				// !duplicate files
-				fmt.Printf("#duplicate files (content) with hash %v are: [%v] \n", hash, strings.Join(files, ", "))
-				fmt.Println()
-			}
-		}
-	}
-	fmt.Println(time.Since(start))
+	fmt.Println("100 goroutines running")
+	time.Sleep(5)
+	fmt.Println("amount at end", amount)
 }
+
+// ?EXAMPLE 15 PIPELINING (STAGES FOR DATA PROCESSING)
+
+// type Array []int
+
+// func (arr Array) sliceToChannel() <-chan int {
+// 	out := make(chan int)
+// 	// out := make(chan int, 10000000)
+
+// 	go func() {
+// 		for _, n := range arr {
+// 			out <- n
+// 		}
+// 		close(out)
+// 	}()
+// 	return out
+// }
+
+// func square(in <-chan int) <-chan int {
+// 	out := make(chan int)
+// 	// out := make(chan int, 10000000)
+
+// 	go func() {
+// 		for n := range in {
+// 			out <- n * n
+// 		}
+// 		close(out)
+// 	}()
+// 	return out
+// }
+
+// func main() {
+// 	start := time.Now()
+// 	fmt.Println("start")
+// 	var nums Array
+// 	for i := 1; i <= 10000000; i++ {
+// 		nums = append(nums, i)
+// 	}
+
+// 	dataChannel := nums.sliceToChannel()
+// 	sqChannel := square(dataChannel)
+
+// 	for n := range sqChannel {
+// 		fmt.Printf("%d  ", n)
+// 	}
+
+// 	end := time.Since(start)
+// 	fmt.Println("end", end)
+// }
+
+// !EXAMPLE 14 (More about Select Usecase)
+
+// func main() {
+// 	fmt.Println("start")
+// 	fastChannel := make(chan string)
+// 	slowChannel := make(chan string)
+
+// 	go func() {
+// 		time.Sleep(time.Second * 2)
+// 		slowChannel <- "Sending data to slow channel"
+// 	}()
+
+// 	go func() {
+// 		time.Sleep(time.Second * 1)
+// 		fastChannel <- "Sending data to fast channel"
+// 	}()
+
+// 	// fmt.Println("slow read first", <-slowChannel)
+// 	// fmt.Println("fast read last", <-fastChannel)
+
+// loop:
+// 	for {
+// 		select {
+// 		case s := <-slowChannel:
+// 			fmt.Println("reading from slow channel", s)
+// 			break loop
+// 		case f := <-fastChannel:
+// 			fmt.Println("reading from fast channel", f)
+// 		}
+// 	}
+
+// 	fmt.Println("end")
+// }
+
+// !EXAMPLE 13 SEQUENTIAL FILE PROCESSING:- Searching duplicate files based on their hash
+
+// type pair struct {
+// 	hash, path string
+// }
+
+// type filelist []string //slice of files
+
+// type results map[string]filelist // hash -> [...files]
+
+// func hashFile(path string) pair {
+// 	file, err := os.Open(path)
+
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
+// 	defer file.Close()
+
+// 	hash := md5.New()
+
+// 	if _, err := io.Copy(hash, file); err != nil {
+// 		log.Fatal(err)
+// 	}
+
+// 	return pair{fmt.Sprintf("%x", hash.Sum(nil)), path}
+// }
+
+// // Take I/P directory and generates hash for every file inside the directory recursively
+// func searchTree(dir string) (results, error) {
+// 	hashes := make(results)
+
+// 	// !The Walk function will recursively visit all files and directories under the specified root.
+// 	// ! os.FileInfo object providing information about the file or directory
+
+// 	err := filepath.Walk(dir, func(p string, fi os.FileInfo, err error) error {
+// 		if err != nil {
+// 			return err
+// 		}
+// 		if !fi.IsDir() {
+// 			fileSize := int(fi.Size() / (1024 * 1024))
+// 			if fileSize == 0 {
+// 				fileSize = 1
+// 			}
+// 			fmt.Printf("size of %15v is %10d MB\n", fi.Name(), fileSize)
+// 		}
+// 		//? All empty Files will have same hashValue
+// 		if fi.Mode().IsRegular() && fi.Size() > 0 {
+// 			h := hashFile(p)
+// 			hashes[h.hash] = append(hashes[h.hash], h.path)
+// 		}
+// 		return nil
+// 	})
+
+// 	return hashes, err
+// }
+
+// func main() {
+// 	start := time.Now()
+
+// 	if len(os.Args) < 2 {
+// 		log.Fatal("missing parameters, provide directory name")
+// 	}
+
+// 	if hashes, err := searchTree(os.Args[1]); err == nil {
+// 		// fmt.Println(hashes)
+// 		for hash, files := range hashes {
+
+// 			if len(files) > 1 {
+// 				// !duplicate files
+// 				fmt.Printf("#duplicate files (content) with hash %v are: [%v] \n", hash, strings.Join(files, ", "))
+// 				fmt.Println()
+// 			}
+// 		}
+// 	}
+// 	fmt.Println(time.Since(start))
+// }
 
 // ?EXAMPLE 13 (We can loop over closed buffered channel)
 
