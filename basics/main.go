@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"sync"
 	"time"
 )
 
@@ -46,6 +47,19 @@ import (
 
      	!GO-ROUTINES KEEP POINTERS TO THE SHARED CHANNELS, IF THE CHANNELS ARE NOT CLOSED IT LEADS TO GO-ROUTINE LEAKS.
 	💎💎💎💎💎💎💎💎💎
+	🤷
+	?WAITGROUP:-
+		💎 A WAITGROUP WAITS FOR A COLLECTION OF GOROUTINES TO FINISH
+		💎 THE MAIN GOROUTINE CALLS ADD() TO SET THE NUMBER OF GOROUTINES TO WAIT FOR
+		💎 THEN EACH OF THE GOROUTINES RUNS & CALLS DONE() WHEN FINISHED
+		💎 AT THE SAME TIME, WAIT() CAN BE USED TO BLOCK UNITLL ALL GOROUTINES HAVE FINISHED
+
+		 *we use a WaitGroup to coordinate the goroutines. The Add method increments the counter,
+		 *and each goroutine calls Done when it finishes. The Wait method blocks until the counter becomes zero
+		 *indicating that all goroutines have completed.
+		 *WaitGroup avoids us to rely on a time.Sleep to give goroutines some time to finish, so we can conclude that
+		 *WaitGroup is a synchronization mechanism
+
 */
 
 /*
@@ -78,25 +92,124 @@ WE CAN ALSO PROMOTE INTERFACE WITHIN A STRUCT
 // 2. Channels provide a safe way for goroutines to communicate and synchronize their execution.
 // 3. You can send data into a channel from one goroutine and receive it in another.
 
-// !EXAMPLE 16 BEAUTIFUL RACE CONDITION EXAMPLE WITH 1000 GO-ROUTINES ON CRITICAL VARIABLE (READ MODIFY WRITE CYCLE)
+// ?EXAMPLE 19 CONFINEMENT:- We confine each go-routine to a particular memory addr
 
-func decrementByOne(amount *int) {
-	(*amount) -= 1
+func getEvenDate(n int) int {
+	time.Sleep(time.Second * 2)
+	return 2 * n
+}
+
+func processData(wg *sync.WaitGroup, result *int, n int) {
+	// !note that we have not used locking in optimal way, but this is just for example
+	defer wg.Done()
+
+	even := getEvenDate(n)
+	(*result) = even
 }
 
 func main() {
-	amount := 1000
-	fmt.Println("amount at start", amount)
+	start := time.Now()
 
-	for i := 1; i <= 1000; i++ {
-		go decrementByOne(&amount)
-		// decrementByOne(&amount)
+	var wg sync.WaitGroup
+
+	input := []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+	result := make([]int, len(input))
+
+	for i, n := range input {
+		wg.Add(1)
+		// ?confine each go-routine to a specifc memory addr not giving entire slice
+		// ?each go-routine acts on a different memory address
+		go processData(&wg, &result[i], n)
 	}
 
-	fmt.Println("100 goroutines running")
-	time.Sleep(5)
-	fmt.Println("amount at end", amount)
+	wg.Wait()
+
+	fmt.Println("result:-", result)
+	fmt.Println("time:-", time.Since(start))
 }
+
+// ?EXAMPLE 18 LOCKING adds BOTTLENECK
+
+// var lock sync.Mutex
+
+// func getEvenDate(n int) int {
+// 	time.Sleep(time.Second * 2)
+// 	return 2 * n
+// }
+
+// func processData(wg *sync.WaitGroup, result *[]int, n int) {
+// 	// !note that we have not used locking in optimal way, but this is just for example
+// 	lock.Lock()
+// 	defer wg.Done()
+
+// 	even := getEvenDate(n)
+// 	(*result) = append((*result), even) // *shared resource
+// 	lock.Unlock()
+// }
+
+// func main() {
+// 	start := time.Now()
+
+// 	var wg sync.WaitGroup
+
+// 	input := []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+// 	result := []int{} // ?shared resource
+
+// 	for _, n := range input {
+// 		wg.Add(1)
+// 		go processData(&wg, &result, n)
+// 	}
+
+// 	wg.Wait()
+
+// 	fmt.Println("result:-", result)
+// 	fmt.Println("time:-", time.Since(start))
+// }
+
+// !EXAMPLE 17 NON CONFINEMENT (WAITGROUPS)
+
+// func processData(wg *sync.WaitGroup, result *[]int, n int) {
+// 	defer wg.Done()
+
+// 	even := n * 2
+// 	(*result) = append((*result), even)
+// }
+
+// func main() {
+// 	var wg sync.WaitGroup
+
+// 	input := []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+// 	result := []int{} // ?shared resource
+
+// 	for _, n := range input {
+// 		wg.Add(1)
+// 		go processData(&wg, &result, n)
+// 	}
+
+// 	wg.Wait()
+
+// 	fmt.Println("result:-", result)
+// }
+
+// !EXAMPLE 16 BEAUTIFUL RACE CONDITION EXAMPLE WITH 1000 GO-ROUTINES ON CRITICAL VARIABLE (READ MODIFY WRITE CYCLE)
+
+// func decrementByOne(amount *int) {
+// 	(*amount) -= 1
+// }
+
+// func main() {
+// 	amount := 1000
+// 	fmt.Println("amount at start", amount)
+
+// 	for i := 1; i <= 1000; i++ {
+// 		go decrementByOne(&amount)
+// 		// decrementByOne(&amount)
+// 	}
+
+// 	fmt.Println("100 goroutines running")
+// 	time.Sleep(5)
+// 	fmt.Println("amount at end", amount)
+// }
 
 // ?EXAMPLE 15 PIPELINING (STAGES FOR DATA PROCESSING)
 
