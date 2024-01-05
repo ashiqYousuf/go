@@ -199,6 +199,7 @@ func fanIn[T any, K any](done <-chan K, channels ...<-chan T) <-chan T {
 
 func main() {
 	start := time.Now()
+
 	done := make(chan int)
 	defer close(done)
 
@@ -208,9 +209,8 @@ func main() {
 
 	randomIntStream := generator(done, randInt)
 
-	// primeStream := primeFinder(done, randomIntStream)
-
 	// !naive
+	// primeStream := primeFinder(done, randomIntStream)
 	// for p := range take(done, primeStream, 10) {
 	// 	fmt.Println(p)
 	// }
@@ -225,7 +225,7 @@ func main() {
 
 	// ?Fan In
 	fannedInStream := fanIn(done, primeFinderChannels...)
-	for p := range take(done, fannedInStream, 10) {
+	for p := range take(done, fannedInStream, 5) {
 		fmt.Println(p)
 	}
 
