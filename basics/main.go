@@ -1,10 +1,9 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
-	"runtime"
-	"sync"
 	"time"
 )
 
@@ -94,22 +93,21 @@ WE CAN ALSO PROMOTE INTERFACE WITHIN A STRUCT
 // 2. Channels provide a safe way for goroutines to communicate and synchronize their execution.
 // 3. You can send data into a channel from one goroutine and receive it in another.
 
-// ?EXAMPLE 21 GENERATORS [PRIME NUMBERS FINDER] Fan In, Fan Out Pattern
+// ?EXAMPLE 22:- GENERATOR WITH CONTEXT
 
-// *generators are only going to produce the amount of data that we are going to take, not running infinitely!
+func Fn() int {
+	return rand.Intn(101)
+}
 
-func generator(done <-chan int, fn func() int) <-chan int {
+func generator(ctx context.Context) <-chan int {
 	stream := make(chan int)
-
 	go func() {
 		defer close(stream)
-
 		for {
 			select {
-			case <-done:
+			case <-ctx.Done():
 				return
-			case stream <- fn():
-				// fmt.Println("ticking")
+			case stream <- Fn():
 			}
 		}
 	}()
@@ -117,120 +115,155 @@ func generator(done <-chan int, fn func() int) <-chan int {
 	return stream
 }
 
-func primeFinder(done <-chan int, randIntStream <-chan int) <-chan int {
-	isPrime := func(randomInt int) bool {
-		for i := randomInt - 1; i > 1; i-- {
-			if randomInt%i == 0 {
-				return false
-			}
-		}
-		return true
-	}
-
-	primes := make(chan int)
-
-	go func() {
-		defer close(primes)
-
-		for {
-			select {
-			case <-done:
-				return
-			case randomInt := <-randIntStream:
-				// fmt.Println(randomInt)
-				if isPrime(randomInt) {
-					primes <- randomInt
-				}
-			}
-		}
-	}()
-
-	return primes
-}
-
-func take(done <-chan int, stream <-chan int, n int) <-chan int {
-	taken := make(chan int)
-
-	go func() {
-		defer close(taken)
-
-		for i := 1; i <= n; i++ {
-			select {
-			case <-done:
-				return
-			case taken <- <-stream:
-			}
-		}
-	}()
-
-	return taken
-}
-
-func fanIn[T any, K any](done <-chan K, channels ...<-chan T) <-chan T {
-	var wg sync.WaitGroup
-
-	fannedInStream := make(chan T)
-
-	transfer := func(c <-chan T) {
-		defer wg.Done()
-
-		for p := range c {
-			select {
-			case <-done:
-				return
-			case fannedInStream <- p:
-			}
-		}
-	}
-
-	for _, c := range channels {
-		wg.Add(1)
-		go transfer(c)
-	}
-
-	go func() {
-		wg.Wait()
-		// When all the transfers are done close the channel
-		close(fannedInStream)
-	}()
-
-	return fannedInStream
-}
-
 func main() {
-	start := time.Now()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*1)
+	defer cancel()
 
-	done := make(chan int)
-	defer close(done)
+	stream := generator(ctx)
 
-	randInt := func() int {
-		return rand.Intn(100000000)
+	for n := range stream {
+		fmt.Printf("%d  ", n)
 	}
-
-	randomIntStream := generator(done, randInt)
-
-	// !naive
-	// primeStream := primeFinder(done, randomIntStream)
-	// for p := range take(done, primeStream, 10) {
-	// 	fmt.Println(p)
-	// }
-
-	// ?Fan Out Spinning primeFinder multiple times
-	CPUCount := runtime.NumCPU()
-	primeFinderChannels := make([]<-chan int, CPUCount)
-
-	for i := 0; i < CPUCount; i++ {
-		primeFinderChannels[i] = primeFinder(done, randomIntStream)
-	}
-
-	// ?Fan In
-	fannedInStream := fanIn(done, primeFinderChannels...)
-	for p := range take(done, fannedInStream, 5) {
-		fmt.Println(p)
-	}
-
-	fmt.Println(time.Since(start))
+	fmt.Println("DONE")
 }
+
+// ?EXAMPLE 21 GENERATORS [PRIME NUMBERS FINDER] Fan In, Fan Out Pattern
+
+// *generators are only going to produce the amount of data that we are going to take, not running infinitely!
+
+// func generator(done <-chan int, fn func() int) <-chan int {
+// 	stream := make(chan int)
+
+// 	go func() {
+// 		defer close(stream)
+
+// 		for {
+// 			select {
+// 			case <-done:
+// 				return
+// 			case stream <- fn():
+// 				// fmt.Println("ticking")
+// 			}
+// 		}
+// 	}()
+
+// 	return stream
+// }
+
+// func primeFinder(done <-chan int, randIntStream <-chan int) <-chan int {
+// 	isPrime := func(randomInt int) bool {
+// 		for i := randomInt - 1; i > 1; i-- {
+// 			if randomInt%i == 0 {
+// 				return false
+// 			}
+// 		}
+// 		return true
+// 	}
+
+// 	primes := make(chan int)
+
+// 	go func() {
+// 		defer close(primes)
+
+// 		for {
+// 			select {
+// 			case <-done:
+// 				return
+// 			case randomInt := <-randIntStream:
+// 				// fmt.Println(randomInt)
+// 				if isPrime(randomInt) {
+// 					primes <- randomInt
+// 				}
+// 			}
+// 		}
+// 	}()
+
+// 	return primes
+// }
+
+// func take(done <-chan int, stream <-chan int, n int) <-chan int {
+// 	taken := make(chan int)
+
+// 	go func() {
+// 		defer close(taken)
+
+// 		for i := 1; i <= n; i++ {
+// 			select {
+// 			case <-done:
+// 				return
+// 			case taken <- <-stream:
+// 			}
+// 		}
+// 	}()
+
+// 	return taken
+// }
+
+// func fanIn[T any, K any](done <-chan K, channels ...<-chan T) <-chan T {
+// 	var wg sync.WaitGroup
+
+// 	fannedInStream := make(chan T)
+
+// 	transfer := func(c <-chan T) {
+// 		defer wg.Done()
+
+// 		for p := range c {
+// 			select {
+// 			case <-done:
+// 				return
+// 			case fannedInStream <- p:
+// 			}
+// 		}
+// 	}
+
+// 	for _, c := range channels {
+// 		wg.Add(1)
+// 		go transfer(c)
+// 	}
+
+// 	go func() {
+// 		wg.Wait()
+// 		// When all the transfers are done close the channel
+// 		close(fannedInStream)
+// 	}()
+
+// 	return fannedInStream
+// }
+
+// func main() {
+// 	start := time.Now()
+
+// 	done := make(chan int)
+// 	defer close(done)
+
+// 	randInt := func() int {
+// 		return rand.Intn(100000000)
+// 	}
+
+// 	randomIntStream := generator(done, randInt)
+
+// 	// !naive
+// 	// primeStream := primeFinder(done, randomIntStream)
+// 	// for p := range take(done, primeStream, 10) {
+// 	// 	fmt.Println(p)
+// 	// }
+
+// 	// ?Fan Out Spinning primeFinder multiple times
+// 	CPUCount := runtime.NumCPU()
+// 	primeFinderChannels := make([]<-chan int, CPUCount)
+
+// 	for i := 0; i < CPUCount; i++ {
+// 		primeFinderChannels[i] = primeFinder(done, randomIntStream)
+// 	}
+
+// 	// ?Fan In
+// 	fannedInStream := fanIn(done, primeFinderChannels...)
+// 	for p := range take(done, fannedInStream, 5) {
+// 		fmt.Println(p)
+// 	}
+
+// 	fmt.Println(time.Since(start))
+// }
 
 // ?EXAMPLE 20 GENERATORS WITH INFINITE STREAM OF DATA
 
