@@ -1,9 +1,10 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"math/rand"
+	"runtime"
+	"sync"
 	"time"
 )
 
@@ -93,39 +94,177 @@ WE CAN ALSO PROMOTE INTERFACE WITHIN A STRUCT
 // 2. Channels provide a safe way for goroutines to communicate and synchronize their execution.
 // 3. You can send data into a channel from one goroutine and receive it in another.
 
-// ?EXAMPLE 22:- GENERATOR WITH CONTEXT
+// *PRACTICE FOR GENERATORS [LEAVE SAME EXAMPLE AS PRIMES WITH INTS ONLY]
 
-func Fn() int {
-	return rand.Intn(101)
+func randomNumberGenerator() int {
+	return rand.Intn(100000000)
 }
 
-func generator(ctx context.Context) <-chan int {
-	stream := make(chan int)
+func generator(done <-chan int) <-chan int {
+	opStream := make(chan int)
+
 	go func() {
-		defer close(stream)
+		defer close(opStream)
+
 		for {
 			select {
-			case <-ctx.Done():
+			case <-done:
 				return
-			case stream <- Fn():
+			case opStream <- randomNumberGenerator():
 			}
 		}
+	}()
+
+	return opStream
+}
+
+func primeFinder(done <-chan int, ipStream <-chan int) <-chan int {
+	primes := make(chan int)
+
+	isPrime := func(n int) bool {
+		for i := n - 1; i > 1; i-- {
+			if n%i == 0 {
+				return false
+			}
+		}
+		return true
+	}
+
+	go func() {
+		defer close(primes)
+
+		for {
+			select {
+			case <-done:
+				return
+			case n := <-ipStream:
+				if isPrime(n) {
+					primes <- n
+				}
+			}
+		}
+	}()
+
+	return primes
+}
+
+func take(done chan int, primeStream <-chan int, N int) <-chan int {
+	opStream := make(chan int)
+
+	go func() {
+		defer close(opStream)
+		// defer func() {
+		// 	done <- 1
+		// }()
+
+		for i := 1; i <= N; i++ {
+			select {
+			case <-done:
+				return
+			case opStream <- <-primeStream:
+			}
+		}
+	}()
+
+	return opStream
+}
+
+func fanIn(done <-chan int, channels ...<-chan int) <-chan int {
+	var wg sync.WaitGroup
+	stream := make(chan int)
+
+	tranferToSingleStream := func(c <-chan int) {
+		// ?We can't close the channel here as this function is run as a goroutines &
+		// ?how to know which is the last goroutine, so we are keeping track using WaitGroup
+		defer wg.Done()
+
+		for p := range c {
+			select {
+			case <-done:
+				return
+			case stream <- p:
+			}
+		}
+	}
+
+	go func() {
+		for _, c := range channels {
+			wg.Add(1)
+			go tranferToSingleStream(c)
+		}
+	}()
+
+	go func() {
+		// ?We can close channel here only, after waiting for all go-routines
+		wg.Wait()
+		close(stream)
 	}()
 
 	return stream
 }
 
 func main() {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*1)
-	defer cancel()
+	start := time.Now()
+	done := make(chan int)
 
-	stream := generator(ctx)
+	CPUCount := runtime.NumCPU()
+	primeChannels := make([]<-chan int, CPUCount)
 
-	for n := range stream {
-		fmt.Printf("%d  ", n)
+	stream := generator(done)
+	// !naive
+	// primes := primeFinder(done, stream)
+	// opStream := take(done, primes, 5)
+
+	// for n := range opStream {
+	// 	fmt.Println(n)
+	// }
+
+	for i := 0; i < CPUCount; i++ {
+		primeChannels[i] = primeFinder(done, stream)
 	}
-	fmt.Println("DONE")
+
+	fannedInStream := fanIn(done, primeChannels...)
+
+	for n := range take(done, fannedInStream, 5) {
+		fmt.Println(n)
+	}
+
+	fmt.Println("time", time.Since(start))
 }
+
+// ?EXAMPLE 22:- GENERATOR WITH CONTEXT
+
+// func Fn() int {
+// 	return rand.Intn(101)
+// }
+
+// func generator(ctx context.Context) <-chan int {
+// 	stream := make(chan int)
+// 	go func() {
+// 		defer close(stream)
+// 		for {
+// 			select {
+// 			case <-ctx.Done():
+// 				return
+// 			case stream <- Fn():
+// 			}
+// 		}
+// 	}()
+
+// 	return stream
+// }
+
+// func main() {
+// 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*1)
+// 	defer cancel()
+
+// 	stream := generator(ctx)
+
+// 	for n := range stream {
+// 		fmt.Printf("%d  ", n)
+// 	}
+// 	fmt.Println("DONE")
+// }
 
 // ?EXAMPLE 21 GENERATORS [PRIME NUMBERS FINDER] Fan In, Fan Out Pattern
 
@@ -198,7 +337,10 @@ func main() {
 
 // 	return taken
 // }
-
+// 	fannedInStream := fanIn(done, primeFinderChannels...)
+// 	for p := range take(done, fannedInStream, 5) {
+// 		fmt.Println(p)
+// 	}
 // func fanIn[T any, K any](done <-chan K, channels ...<-chan T) <-chan T {
 // 	var wg sync.WaitGroup
 
