@@ -1,12 +1,6 @@
 package main
 
-import (
-	"fmt"
-	"math/rand"
-	"runtime"
-	"sync"
-	"time"
-)
+// GO FROM BOTTOM TO TOP
 
 /*
 	👏1. SENDING OR RECEIVING CALL ON A CHANNEL ARE BLOCKING IN NATURE UNTIL SENDER FINDS A RECEIVER OR RECEIVER FINDS A SENDER
@@ -94,143 +88,191 @@ WE CAN ALSO PROMOTE INTERFACE WITHIN A STRUCT
 // 2. Channels provide a safe way for goroutines to communicate and synchronize their execution.
 // 3. You can send data into a channel from one goroutine and receive it in another.
 
+// **************************************************END*****************************************************************
+
+// *TYPE ASSERTION TO EXTRACT THE UNDERLYING TYPE MEANS USING THE TYPE ASSERTION SYNTAX TO FIGURE OUT WHAT KIND
+// *OF VALUE IS STORED IN THE INTERFACE & THEN WORKING WITH IT AS THAT SPECIFIC TYPE A 	, OK:= ARG.(TYPE)
+
+// ?EXAMPLE 03
+
+// ?EXAMPLE 02 VARIABLE ARGS
+
+// func sum(nums ...int) int {
+// 	total := 0
+// 	for _, n := range nums {
+// 		total += n
+// 	}
+// 	return total
+// }
+
+// func main() {
+// 	nums := []int{1, 2, 3, 4, 5, 6, 7}
+// 	fmt.Println(sum(1))
+// 	fmt.Println(sum(1, 2, 3, 4))
+// 	fmt.Println(sum(1, 2, 3, 4, 5))
+// 	fmt.Println(sum(nums...)) // * unpacking slice
+// }
+
+// ?EXAMPLE 01 IOATA
+
+// type payments uint
+
+// func main() {
+// 	const (
+// 		_                     = iota
+// 		startPayment payments = iota*10 + iota
+// 		beginTransaction
+// 		payMoney
+// 		endTransaction
+// 	)
+
+// 	fmt.Printf("%d %d %d %d\n", startPayment, beginTransaction, payMoney, endTransaction)
+// }
+
+// **************************************************************************************************************
+// **************************************************************************************************************
+// **************************************************************************************************************
+// **************************************************************************************************************
+// **************************************************************************************************************
+// **************************************************************************************************************
+
 // *PRACTICE FOR GENERATORS [LEAVE SAME EXAMPLE AS PRIMES WITH INTS ONLY]
 
-func randomNumberGenerator() int {
-	return rand.Intn(100000000)
-}
+// func randomNumberGenerator() int {
+// 	return rand.Intn(100000000)
+// }
 
-func generator(done <-chan int) <-chan int {
-	opStream := make(chan int)
+// func generator(done <-chan int) <-chan int {
+// 	opStream := make(chan int)
 
-	go func() {
-		defer close(opStream)
+// 	go func() {
+// 		defer close(opStream)
 
-		for {
-			select {
-			case <-done:
-				return
-			case opStream <- randomNumberGenerator():
-			}
-		}
-	}()
+// 		for {
+// 			select {
+// 			case <-done:
+// 				return
+// 			case opStream <- randomNumberGenerator():
+// 			}
+// 		}
+// 	}()
 
-	return opStream
-}
+// 	return opStream
+// }
 
-func primeFinder(done <-chan int, ipStream <-chan int) <-chan int {
-	primes := make(chan int)
+// func primeFinder(done <-chan int, ipStream <-chan int) <-chan int {
+// 	primes := make(chan int)
 
-	isPrime := func(n int) bool {
-		for i := n - 1; i > 1; i-- {
-			if n%i == 0 {
-				return false
-			}
-		}
-		return true
-	}
+// 	isPrime := func(n int) bool {
+// 		for i := n - 1; i > 1; i-- {
+// 			if n%i == 0 {
+// 				return false
+// 			}
+// 		}
+// 		return true
+// 	}
 
-	go func() {
-		defer close(primes)
+// 	go func() {
+// 		defer close(primes)
 
-		for {
-			select {
-			case <-done:
-				return
-			case n := <-ipStream:
-				if isPrime(n) {
-					primes <- n
-				}
-			}
-		}
-	}()
+// 		for {
+// 			select {
+// 			case <-done:
+// 				return
+// 			case n := <-ipStream:
+// 				if isPrime(n) {
+// 					primes <- n
+// 				}
+// 			}
+// 		}
+// 	}()
 
-	return primes
-}
+// 	return primes
+// }
 
-func take(done chan int, primeStream <-chan int, N int) <-chan int {
-	opStream := make(chan int)
+// func take(done chan int, primeStream <-chan int, N int) <-chan int {
+// 	opStream := make(chan int)
 
-	go func() {
-		defer close(opStream)
-		// defer func() {
-		// 	done <- 1
-		// }()
+// 	go func() {
+// 		defer close(opStream)
+// 		// defer func() {
+// 		// 	done <- 1
+// 		// }()
 
-		for i := 1; i <= N; i++ {
-			select {
-			case <-done:
-				return
-			case opStream <- <-primeStream:
-			}
-		}
-	}()
+// 		for i := 1; i <= N; i++ {
+// 			select {
+// 			case <-done:
+// 				return
+// 			case opStream <- <-primeStream:
+// 			}
+// 		}
+// 	}()
 
-	return opStream
-}
+// 	return opStream
+// }
 
-func fanIn(done <-chan int, channels ...<-chan int) <-chan int {
-	var wg sync.WaitGroup
-	stream := make(chan int)
+// func fanIn(done <-chan int, channels ...<-chan int) <-chan int {
+// 	var wg sync.WaitGroup
+// 	stream := make(chan int)
 
-	tranferToSingleStream := func(c <-chan int) {
-		// ?We can't close the channel here as this function is run as a goroutines &
-		// ?how to know which is the last goroutine, so we are keeping track using WaitGroup
-		defer wg.Done()
+// 	tranferToSingleStream := func(c <-chan int) {
+// 		// ?We can't close the channel here as this function is run as a goroutines &
+// 		// ?how to know which is the last goroutine, so we are keeping track using WaitGroup
+// 		defer wg.Done()
 
-		for p := range c {
-			select {
-			case <-done:
-				return
-			case stream <- p:
-			}
-		}
-	}
+// 		for p := range c {
+// 			select {
+// 			case <-done:
+// 				return
+// 			case stream <- p:
+// 			}
+// 		}
+// 	}
 
-	go func() {
-		for _, c := range channels {
-			wg.Add(1)
-			go tranferToSingleStream(c)
-		}
-	}()
+// 	go func() {
+// 		for _, c := range channels {
+// 			wg.Add(1)
+// 			go tranferToSingleStream(c)
+// 		}
+// 	}()
 
-	go func() {
-		// ?We can close channel here only, after waiting for all go-routines
-		wg.Wait()
-		close(stream)
-	}()
+// 	go func() {
+// 		// ?We can close channel here only, after waiting for all go-routines
+// 		wg.Wait()
+// 		close(stream)
+// 	}()
 
-	return stream
-}
+// 	return stream
+// }
 
-func main() {
-	start := time.Now()
-	done := make(chan int)
+// func main() {
+// 	start := time.Now()
+// 	done := make(chan int)
 
-	CPUCount := runtime.NumCPU()
-	primeChannels := make([]<-chan int, CPUCount)
+// 	CPUCount := runtime.NumCPU()
+// 	primeChannels := make([]<-chan int, CPUCount)
 
-	stream := generator(done)
-	// !naive
-	// primes := primeFinder(done, stream)
-	// opStream := take(done, primes, 5)
+// 	stream := generator(done)
+// 	// !naive
+// 	// primes := primeFinder(done, stream)
+// 	// opStream := take(done, primes, 5)
 
-	// for n := range opStream {
-	// 	fmt.Println(n)
-	// }
+// 	// for n := range opStream {
+// 	// 	fmt.Println(n)
+// 	// }
 
-	for i := 0; i < CPUCount; i++ {
-		primeChannels[i] = primeFinder(done, stream)
-	}
+// 	for i := 0; i < CPUCount; i++ {
+// 		primeChannels[i] = primeFinder(done, stream)
+// 	}
 
-	fannedInStream := fanIn(done, primeChannels...)
+// 	fannedInStream := fanIn(done, primeChannels...)
 
-	for n := range take(done, fannedInStream, 5) {
-		fmt.Println(n)
-	}
+// 	for n := range take(done, fannedInStream, 5) {
+// 		fmt.Println(n)
+// 	}
 
-	fmt.Println("time", time.Since(start))
-}
+// 	fmt.Println("time", time.Since(start))
+// }
 
 // ?EXAMPLE 22:- GENERATOR WITH CONTEXT
 
